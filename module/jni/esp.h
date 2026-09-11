@@ -10,7 +10,7 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
 
-// === IL2CPP Tipleri (header'a gerek yok, manuel tanımlar) ===
+// === IL2CPP Tipleri ===
 typedef void* Il2CppDomain;
 typedef void* Il2CppAssembly;
 typedef void* Il2CppImage;
@@ -28,18 +28,18 @@ struct Vec3 { float x, y, z; };
 
 // === ESP çizim verisi ===
 struct EspData {
-    Vec2  screen_pos;      // Ekran koordinatları
-    float distance;        // Oyuncuya mesafe
-    std::string name;      // Oyuncu ismi
-    float hp;              // Can
-    float max_hp;          // Maksimum can
-    int   team_id;         // Takım ID
-    bool  is_dead;         // Ölü mü
-    bool  is_local;        // Yerel oyuncu mu
-    uint64_t role_id;      // Rol ID
+    Vec2  screen_pos;
+    float distance;
+    std::string name;
+    float hp;
+    float max_hp;
+    int   team_id;
+    bool  is_dead;
+    bool  is_local;
+    uint64_t role_id;
 };
 
-// === Global değişkenler (main.cpp'de tanımlanacak) ===
+// === Global değişkenler ===
 extern uintptr_t g_il2cpp_base;
 extern Il2CppClass* g_player_class;
 extern Il2CppClass* g_camera_class;
@@ -65,6 +65,7 @@ struct Il2CppApi {
     void* (*class_get_parent)(void* klass);
     const char* (*class_get_name)(void* klass);
     const char* (*class_get_namespace)(void* klass);
+    void* (*thread_attach)(void* domain);
 };
 
 extern Il2CppApi api;
@@ -74,7 +75,6 @@ static inline uintptr_t get_absolute(uintptr_t rva) {
     return g_il2cpp_base + rva;
 }
 
-// RVA'dan fonksiyon çağrısı için template
 template<typename T>
 static inline T call_rva(uintptr_t rva) {
     return reinterpret_cast<T>(g_il2cpp_base + rva);

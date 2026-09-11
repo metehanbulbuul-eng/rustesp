@@ -118,10 +118,10 @@ bool init_il2cpp_api() {
     LOAD_API(class_get_parent, void*(*)(void*))
     LOAD_API(class_get_name, const char*(*)(void*))
     LOAD_API(class_get_namespace, const char*(*)(void*))
+    LOAD_API(thread_attach, void*(*)(void*))
 
     #undef LOAD_API
 
-    // string_to_utf8 sembolü artık kullanılmıyor (manuel dönüşüm yapacağız)
     api.string_to_utf8 = nullptr;
 
     if (!api.domain_get || !api.class_from_name) {
@@ -153,8 +153,7 @@ Il2CppClass* find_class(const char* namespaze, const char* name) {
     return nullptr;
 }
 
-// === Manuel UTF-16 → UTF-8 dönüşümü ===
-// Il2CppString layout: [klass*(8)][monitor*(8)][length:int32(4)][chars:char16_t...]
+// Manuel UTF-16 → UTF-8 dönüşümü
 std::string read_string(void* il2cpp_str) {
     if (!il2cpp_str) return "";
 

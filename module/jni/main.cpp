@@ -102,6 +102,16 @@ public:
                 return;
             }
 
+            // Thread'i IL2CPP domain'ine attach et (ZORUNLU!)
+            Il2CppDomain* domain = (Il2CppDomain*)api.domain_get();
+            if (domain && api.thread_attach) {
+                api.thread_attach(domain);
+                LOGI("Thread IL2CPP domain'ine attach edildi");
+            } else {
+                LOGE("Thread attach basarisiz!");
+                return;
+            }
+
             // Sınıfları bul
             g_player_class = find_class("", "PlayerEntity");
             if (!g_player_class) {
