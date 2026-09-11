@@ -9,31 +9,50 @@
 uintptr_t g_il2cpp_base = 0;
 Il2CppApi api = {};
 
-// === dl_iterate_phdr callback ===
+// === libil2cpp.so'nun tam yolunu ve base adresini bul ===
+static char g_il2cpp_path[512] = {0};
+
 static int find_lib_callback(struct dl_phdr_info* info, size_t size, void* data) {
     (void)size;
-    const char* target = (const char*)data;
-    if (info->dlpi_name && strstr(info->dlpi_name, target)) {
+    (void)data;
+    if (info->dlpi_name && strstr(info->dlpi_name, "libil2cpp.so")) {
         g_il2cpp_base = (uintptr_t)info->dlpi_addr;
+        strncpy(g_il2cpp_path, info->dlpi_name, sizeof(g_il2cpp_path) - 1);
+        g_il2cpp_path[sizeof(g_il2cpp_path) - 1] = '\0';
         return 1;
     }
     return 0;
 }
 
-// === IL2CPP API fonksiyonlarını RTLD_DEFAULT ile bul ===
+// === IL2CPP API fonksiyonlarını dlopen + dlsym ile bul ===
 bool init_il2cpp_api() {
-    // 1. dl_iterate_phdr ile base adresi bul
-    dl_iterate_phdr(find_lib_callback, (void*)"libil2cpp.so");
+    // 1. dl_iterate_phdr ile base + tam yol bul
+    dl_iterate_phdr(find_lib_callback, nullptr);
     if (g_il2cpp_base == 0) {
         LOGE("libil2cpp.so base bulunamadi (dl_iterate_phdr)");
         return false;
     }
     LOGI("libil2cpp.so base: 0x%lx", (unsigned long)g_il2cpp_base);
+    LOGI("libil2cpp.so path: %s", g_il2cpp_path);
 
-    // 2. RTLD_DEFAULT ile fonksiyonları bul (tüm namespace'leri tarar)
+    // 2. Tam yol ile dlopen et - doğru namespace'te handle alırız
+    void* handle = dlopen(g_il2cpp_path, RTLD_NOW | RTLD_LOCAL);
+    if (!handle) {
+        LOGE("libil2cpp.so dlopen basarisiz: %s", dlerror());
+        // Alternatif: RTLD_GLOBAL dene
+        handle = dlopen(g_il2cpp_path, RTLD_NOW | RTLD_GLOBAL);
+        if (!handle) {
+            LOGE("libil2cpp.so dlopen (RTLD_GLOBAL) basarisiz: %s", dlerror());
+            return false;
+        }
+    }
+    LOGI("libil2cpp.so handle: %p", handle);
+
+    // 3. dlsym ile fonksiyonları bul
     #define LOAD_API(name, type) \
-        api.name = (type)dlsym(RTLD_DEFAULT, "il2cpp_" #name); \
-        if (!api.name) { LOGE("il2cpp_%s bulunamadi", #name); }
+        api.name = (type)dlsym(handle, "il2cpp_" #name); \
+        if (!api.name) { LOGE("il2cpp_%s bulunamadi", #name); } \
+        else { LOGI("il2cpp_%s OK (%p)", #name, api.name); }
 
     LOAD_API(domain_get, void*(*)())
     LOAD_API(domain_assembly_open, void*(*)(void*, const char*))
