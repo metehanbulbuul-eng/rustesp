@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
 uintptr_t g_il2cpp_base = 0;
 Il2CppApi api = {};
@@ -23,7 +24,6 @@ static int find_lib_callback(struct dl_phdr_info* info, size_t size, void* data)
     return 0;
 }
 
-// === ELF'ten sembol ara (GNU hash tabanlı, güvenli) ===
 static void* find_symbol_in_elf(uintptr_t base, const char* symbol_name) {
     Elf64_Ehdr* ehdr = (Elf64_Ehdr*)base;
     if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) != 0) return nullptr;
@@ -57,7 +57,6 @@ static void* find_symbol_in_elf(uintptr_t base, const char* symbol_name) {
 
     if (!strtab || !symtab || !gnu_hash) return nullptr;
 
-    // GNU hash'ten gerçek sembol sayısını bul
     uint32_t* gh = (uint32_t*)gnu_hash;
     uint32_t nbuckets    = gh[0];
     uint32_t symoffset   = gh[1];
@@ -70,13 +69,9 @@ static void* find_symbol_in_elf(uintptr_t base, const char* symbol_name) {
     for (uint32_t i = 0; i < nbuckets; i++) {
         if (buckets[i] > max_sym) max_sym = buckets[i];
     }
-
     if (max_sym >= symoffset) {
         uint32_t* c = &chain[max_sym - symoffset];
-        while (!(*c & 1)) {
-            max_sym++;
-            c++;
-        }
+        while (!(*c & 1)) { max_sym++; c++; }
     }
     size_t num_syms = max_sym + 1;
 
@@ -93,7 +88,6 @@ static void* find_symbol_in_elf(uintptr_t base, const char* symbol_name) {
     return nullptr;
 }
 
-// === Tüm il2cpp API'lerini ELF'ten bul ===
 bool init_il2cpp_api() {
     dl_iterate_phdr(find_lib_callback, nullptr);
     if (g_il2cpp_base == 0) {
@@ -103,10 +97,9 @@ bool init_il2cpp_api() {
     LOGI("libil2cpp.so base: 0x%lx", (unsigned long)g_il2cpp_base);
 
     #define LOAD_API(name, type) \
-        LOGI("Araniyor: il2cpp_%s", #name); \
         api.name = (type)find_symbol_in_elf(g_il2cpp_base, "il2cpp_" #name); \
-        if (!api.name) { LOGE("  -> BULUNAMADI"); } \
-        else { LOGI("  -> OK (%p)", api.name); }
+        if (!api.name) { LOGE("il2cpp_%s BULUNAMADI", #name); } \
+        else { LOGI("il2cpp_%s OK", #name); }
 
     LOAD_API(domain_get, void*(*)())
     LOAD_API(domain_assembly_open, void*(*)(void*, const char*))
@@ -118,7 +111,6 @@ bool init_il2cpp_api() {
     LOAD_API(object_new, void*(*)(void*))
     LOAD_API(runtime_invoke, void*(*)(void*, void*, void**, void**))
     LOAD_API(string_new, void*(*)(const char*))
-    LOAD_API(string_to_utf8, char*(*)(void*))
     LOAD_API(array_new, void*(*)(void*, size_t))
     LOAD_API(array_length, uint32_t(*)(void*))
     LOAD_API(field_get_value_object, void*(*)(void*, void*))
@@ -128,6 +120,9 @@ bool init_il2cpp_api() {
     LOAD_API(class_get_namespace, const char*(*)(void*))
 
     #undef LOAD_API
+
+    // string_to_utf8 sembolü artık kullanılmıyor (manuel dönüşüm yapacağız)
+    api.string_to_utf8 = nullptr;
 
     if (!api.domain_get || !api.class_from_name) {
         LOGE("Kritik API fonksiyonlari eksik!");
@@ -158,11 +153,43 @@ Il2CppClass* find_class(const char* namespaze, const char* name) {
     return nullptr;
 }
 
+// === Manuel UTF-16 → UTF-8 dönüşümü ===
+// Il2CppString layout: [klass*(8)][monitor*(8)][length:int32(4)][chars:char16_t...]
 std::string read_string(void* il2cpp_str) {
-    if (!il2cpp_str || !api.string_to_utf8) return "";
-    char* cstr = api.string_to_utf8(il2cpp_str);
-    if (!cstr) return "";
-    std::string result(cstr);
-    free(cstr);
+    if (!il2cpp_str) return "";
+
+    int32_t length = *(int32_t*)((uint8_t*)il2cpp_str + 0x10);
+    if (length <= 0 || length > 2048) return "";
+
+    char16_t* chars = (char16_t*)((uint8_t*)il2cpp_str + 0x14);
+
+    std::string result;
+    result.reserve(length);
+
+    for (int32_t i = 0; i < length; i++) {
+        uint32_t cp = chars[i];
+        if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < length) {
+            uint32_t low = chars[i + 1];
+            if (low >= 0xDC00 && low <= 0xDFFF) {
+                cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                i++;
+            }
+        }
+        if (cp < 0x80) {
+            result += (char)cp;
+        } else if (cp < 0x800) {
+            result += (char)(0xC0 | (cp >> 6));
+            result += (char)(0x80 | (cp & 0x3F));
+        } else if (cp < 0x10000) {
+            result += (char)(0xE0 | (cp >> 12));
+            result += (char)(0x80 | ((cp >> 6) & 0x3F));
+            result += (char)(0x80 | (cp & 0x3F));
+        } else {
+            result += (char)(0xF0 | (cp >> 18));
+            result += (char)(0x80 | ((cp >> 12) & 0x3F));
+            result += (char)(0x80 | ((cp >> 6) & 0x3F));
+            result += (char)(0x80 | (cp & 0x3F));
+        }
+    }
     return result;
 }

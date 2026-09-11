@@ -96,19 +96,13 @@ public:
 
             LOGI("libil2cpp.so yuklendi, ESP baslatiliyor...");
 
-            // ==========================================
-            // TEST: Sadece init_il2cpp_api'yi çağır
-            // ==========================================
-            LOGI("=== TEST: init_il2cpp_api cagriliyor ===");
+            // IL2CPP API'yi başlat
             if (!init_il2cpp_api()) {
                 LOGE("IL2CPP API baslatilamadi");
                 return;
             }
-            LOGI("=== TEST: init bitti, simdi return ===");
-            return;  // <-- BURADA DUR, GERİSİNİ ÇALIŞTIRMA
-            // ==========================================
 
-            // Aşağıdaki kod şimdilik çalışmıyor:
+            // Sınıfları bul
             g_player_class = find_class("", "PlayerEntity");
             if (!g_player_class) {
                 g_player_class = find_class("Soc", "PlayerEntity");
