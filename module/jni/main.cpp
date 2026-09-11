@@ -14,6 +14,11 @@
 
 using namespace zygisk;
 
+// === Global sınıf pointer'ları (esp.h'de extern) ===
+Il2CppClass* g_player_class = nullptr;
+Il2CppClass* g_camera_class = nullptr;
+Il2CppClass* g_entity_manager_class = nullptr;
+
 // === gl.cpp fonksiyonları ===
 bool  gl_init();
 void  gl_set_screen_size(int w, int h);
