@@ -2,6 +2,7 @@
 #include "offsets.h"
 #include <dlfcn.h>
 #include <link.h>
+#include <android/dlext.h>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -24,7 +25,35 @@ static int find_lib_callback(struct dl_phdr_info* info, size_t size, void* data)
     return 0;
 }
 
-// === IL2CPP API fonksiyonlarını dlopen + dlsym ile bul ===
+// === android_dlopen_ext ile namespace'i aşarak kütüphane aç ===
+static void* open_lib_with_namespace(const char* path) {
+    // Önce standart dlopen dene
+    void* handle = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+    if (handle) {
+        LOGI("dlopen OK (standart): %p", handle);
+        return handle;
+    }
+
+    LOGI("Standart dlopen basarisiz, android_dlopen_ext deneniyor...");
+
+    // android_dlopen_ext ile dene
+    struct android_namespace_t* ns = nullptr; // default namespace
+    android_dlextinfo extinfo;
+    memset(&extinfo, 0, sizeof(extinfo));
+    extinfo.flags = ANDROID_DLEXT_USE_NAMESPACE;
+    extinfo.library_namespace = ns;
+
+    handle = android_dlopen_ext(path, RTLD_NOW | RTLD_GLOBAL, &extinfo);
+    if (handle) {
+        LOGI("android_dlopen_ext OK: %p", handle);
+        return handle;
+    }
+
+    LOGE("android_dlopen_ext de basarisiz: %s", dlerror());
+    return nullptr;
+}
+
+// === IL2CPP API fonksiyonlarını android_dlopen_ext + dlsym ile bul ===
 bool init_il2cpp_api() {
     // 1. dl_iterate_phdr ile base + tam yol bul
     dl_iterate_phdr(find_lib_callback, nullptr);
@@ -35,16 +64,11 @@ bool init_il2cpp_api() {
     LOGI("libil2cpp.so base: 0x%lx", (unsigned long)g_il2cpp_base);
     LOGI("libil2cpp.so path: %s", g_il2cpp_path);
 
-    // 2. Tam yol ile dlopen et - doğru namespace'te handle alırız
-    void* handle = dlopen(g_il2cpp_path, RTLD_NOW | RTLD_LOCAL);
+    // 2. android_dlopen_ext ile aç
+    void* handle = open_lib_with_namespace(g_il2cpp_path);
     if (!handle) {
-        LOGE("libil2cpp.so dlopen basarisiz: %s", dlerror());
-        // Alternatif: RTLD_GLOBAL dene
-        handle = dlopen(g_il2cpp_path, RTLD_NOW | RTLD_GLOBAL);
-        if (!handle) {
-            LOGE("libil2cpp.so dlopen (RTLD_GLOBAL) basarisiz: %s", dlerror());
-            return false;
-        }
+        LOGE("libil2cpp.so acilamadi!");
+        return false;
     }
     LOGI("libil2cpp.so handle: %p", handle);
 
