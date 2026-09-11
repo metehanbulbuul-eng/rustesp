@@ -38,6 +38,13 @@ static uintptr_t check_il2cpp_loaded() {
     return result;
 }
 
+// === EntityManager.Instance al ===
+static void* get_entity_manager_instance() {
+    typedef void* (*get_instance_t)();
+    get_instance_t fn = call_rva<get_instance_t>(RVA_EntityManager_get_Instance);
+    return fn();
+}
+
 // === Zygisk modülü ===
 class RustESPModule : public ModuleBase {
 public:
@@ -102,60 +109,34 @@ public:
                 return;
             }
 
-            // ==========================================
-            // TEST: Sadece domain_get çağır
-            // ==========================================
-                                  // 10 saniye bekle - IL2CPP runtime'ın hazır olmasını bekle
-            LOGI("=== IL2CPP runtime'in hazir olmasini bekliyorum (10sn) ===");
+            // IL2CPP runtime'ın hazır olmasını bekle
+            LOGI("IL2CPP runtime'in hazir olmasini bekliyorum (10sn)...");
             sleep(10);
-            LOGI("=== Bekleme bitti, domain_get cagriliyor ===");
 
+            // Thread attach
             Il2CppDomain* domain = (Il2CppDomain*)api.domain_get();
-            LOGI("=== domain_get sonuc: %p ===", domain);
-
             if (!domain) {
-                LOGE("Domain null dondu, IL2CPP hazir degil!");
+                LOGE("Domain null dondu!");
                 return;
             }
-
             if (api.thread_attach) {
                 api.thread_attach(domain);
                 LOGI("Thread IL2CPP domain'ine attach edildi");
             }
 
             // Sınıfları bul
-                        // PlayerEntity - tam namespace
             g_player_class = find_class("WizardGames.Soc.Common.Entity", "PlayerEntity");
-
-            // Camera - UnityEngine
             g_camera_class = find_class("UnityEngine", "Camera");
-
-            // EntityManager - birden fazla namespace dene
-            g_entity_manager_class = find_class("WizardGames.Soc.Common.Entity", "EntityManager");
-            if (!g_entity_manager_class) {
-                g_entity_manager_class = find_class("WizardGames.Soc.Common.Manager", "EntityManager");
-            }
-            if (!g_entity_manager_class) {
-                g_entity_manager_class = find_class("WizardGames.Soc.SocSimulator", "EntityManager");
-            }
-            if (!g_entity_manager_class) {
-                g_entity_manager_class = find_class("WizardGames.Soc.Common", "EntityManager");
-            }
-            if (!g_entity_manager_class) {
-                g_entity_manager_class = find_class("", "EntityManager");
-            }
+            g_entity_manager_class = find_class("WizardGames.Soc.Share.Framework", "EntityManager");
 
             LOGI("Siniflar: PlayerEntity=%p Camera=%p EntityManager=%p",
                  g_player_class, g_camera_class, g_entity_manager_class);
 
-            LOGI("ESP hazir");
-            // ==========================================
+            // EntityManager.Instance'ı al
+            void* em_instance = get_entity_manager_instance();
+            LOGI("EntityManager.Instance = %p", em_instance);
 
-            // Aşağısı test için devre dışı:
-            // g_player_class = find_class("", "PlayerEntity");
-            // g_camera_class = find_class("UnityEngine", "Camera");
-            // g_entity_manager_class = find_class("", "EntityManager");
-            // LOGI("ESP hazir");
+            LOGI("ESP hazir");
         });
         worker.detach();
     }
