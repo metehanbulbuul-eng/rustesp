@@ -105,11 +105,25 @@ public:
             // ==========================================
             // TEST: Sadece domain_get çağır
             // ==========================================
-            LOGI("=== TEST: domain_get cagriliyor ===");
+                        // Thread'i IL2CPP domain'ine attach et
             Il2CppDomain* domain = (Il2CppDomain*)api.domain_get();
-            LOGI("=== TEST: domain_get sonuc=%p ===", domain);
-            LOGI("=== TEST: BITTI, geri donuluyor ===");
-            return;
+            if (domain && api.thread_attach) {
+                api.thread_attach(domain);
+                LOGI("Thread IL2CPP domain'ine attach edildi");
+            }
+
+            // Sınıfları bul
+            g_player_class = find_class("", "PlayerEntity");
+            if (!g_player_class) {
+                g_player_class = find_class("Soc", "PlayerEntity");
+            }
+            g_camera_class = find_class("UnityEngine", "Camera");
+            g_entity_manager_class = find_class("", "EntityManager");
+
+            LOGI("Siniflar: PlayerEntity=%p Camera=%p EntityManager=%p",
+                 g_player_class, g_camera_class, g_entity_manager_class);
+
+            LOGI("ESP hazir");
             // ==========================================
 
             // Aşağısı test için devre dışı:
