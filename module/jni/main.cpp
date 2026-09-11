@@ -124,12 +124,26 @@ public:
             }
 
             // Sınıfları bul
-            g_player_class = find_class("", "PlayerEntity");
-            if (!g_player_class) {
-                g_player_class = find_class("Soc", "PlayerEntity");
-            }
+                        // PlayerEntity - tam namespace
+            g_player_class = find_class("WizardGames.Soc.Common.Entity", "PlayerEntity");
+
+            // Camera - UnityEngine
             g_camera_class = find_class("UnityEngine", "Camera");
-            g_entity_manager_class = find_class("", "EntityManager");
+
+            // EntityManager - birden fazla namespace dene
+            g_entity_manager_class = find_class("WizardGames.Soc.Common.Entity", "EntityManager");
+            if (!g_entity_manager_class) {
+                g_entity_manager_class = find_class("WizardGames.Soc.Common.Manager", "EntityManager");
+            }
+            if (!g_entity_manager_class) {
+                g_entity_manager_class = find_class("WizardGames.Soc.SocSimulator", "EntityManager");
+            }
+            if (!g_entity_manager_class) {
+                g_entity_manager_class = find_class("WizardGames.Soc.Common", "EntityManager");
+            }
+            if (!g_entity_manager_class) {
+                g_entity_manager_class = find_class("", "EntityManager");
+            }
 
             LOGI("Siniflar: PlayerEntity=%p Camera=%p EntityManager=%p",
                  g_player_class, g_camera_class, g_entity_manager_class);
