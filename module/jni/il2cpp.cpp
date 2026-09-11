@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "esp.h"
 #include "offsets.h"
 #include <dlfcn.h>
@@ -11,6 +10,17 @@
 uintptr_t g_il2cpp_base = 0;
 Il2CppApi api = {};
 
+// === dl_iterate_phdr callback: libil2cpp.so'nun base'ini bul ===
+static int find_lib_callback(struct dl_phdr_info* info, size_t size, void* data) {
+    (void)size;
+    const char* target = (const char*)data;
+    if (info->dlpi_name && strstr(info->dlpi_name, target)) {
+        g_il2cpp_base = (uintptr_t)info->dlpi_addr;
+        return 1; // Bulundu, dur
+    }
+    return 0; // Devam et
+}
+
 // === IL2CPP API fonksiyonlarını dlsym ile bağla ===
 bool init_il2cpp_api() {
     void* handle = dlopen("libil2cpp.so", RTLD_NOLOAD | RTLD_NOW);
@@ -19,12 +29,13 @@ bool init_il2cpp_api() {
         return false;
     }
 
-    struct link_map* map = nullptr;
-    if (dlinfo(handle, RTLD_DI_LINKMAP, &map) != 0 || !map) {
-        LOGE("link_map alinamadi!");
+    // dl_iterate_phdr ile base adresi bul
+    dl_iterate_phdr(find_lib_callback, (void*)"libil2cpp.so");
+
+    if (g_il2cpp_base == 0) {
+        LOGE("libil2cpp.so base adresi bulunamadi!");
         return false;
     }
-    g_il2cpp_base = (uintptr_t)map->l_addr;
     LOGI("libil2cpp.so base: 0x%lx", (unsigned long)g_il2cpp_base);
 
     #define LOAD_API(name, type) \
