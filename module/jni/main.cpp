@@ -24,7 +24,6 @@ Il2CppClass* find_class(const char* namespaze, const char* name);
 std::string read_string(void* il2cpp_str);
 
 static bool g_is_target = false;
-static bool g_hook_installed = false;
 
 // === libil2cpp.so base adresi kontrolü ===
 static uintptr_t check_il2cpp_loaded() {
@@ -81,7 +80,7 @@ public:
         LOGI("postAppSpecialize: target app, spawning worker thread...");
 
         std::thread worker([]() {
-            // libil2cpp.so'nun yüklenmesini bekle - dl_iterate_phdr ile kontrol
+            // libil2cpp.so'nun yüklenmesini bekle
             int attempts = 0;
             while (attempts < 60) {
                 uintptr_t test_base = check_il2cpp_loaded();
@@ -97,11 +96,19 @@ public:
 
             LOGI("libil2cpp.so yuklendi, ESP baslatiliyor...");
 
+            // ==========================================
+            // TEST: Sadece init_il2cpp_api'yi çağır
+            // ==========================================
+            LOGI("=== TEST: init_il2cpp_api cagriliyor ===");
             if (!init_il2cpp_api()) {
                 LOGE("IL2CPP API baslatilamadi");
                 return;
             }
+            LOGI("=== TEST: init bitti, simdi return ===");
+            return;  // <-- BURADA DUR, GERİSİNİ ÇALIŞTIRMA
+            // ==========================================
 
+            // Aşağıdaki kod şimdilik çalışmıyor:
             g_player_class = find_class("", "PlayerEntity");
             if (!g_player_class) {
                 g_player_class = find_class("Soc", "PlayerEntity");
@@ -112,7 +119,6 @@ public:
             LOGI("Siniflar: PlayerEntity=%p Camera=%p EntityManager=%p",
                  g_player_class, g_camera_class, g_entity_manager_class);
 
-            g_hook_installed = true;
             LOGI("ESP hazir");
         });
         worker.detach();
