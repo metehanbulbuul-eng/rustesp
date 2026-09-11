@@ -105,9 +105,20 @@ public:
             // ==========================================
             // TEST: Sadece domain_get çağır
             // ==========================================
-                        // Thread'i IL2CPP domain'ine attach et
+                                  // 10 saniye bekle - IL2CPP runtime'ın hazır olmasını bekle
+            LOGI("=== IL2CPP runtime'in hazir olmasini bekliyorum (10sn) ===");
+            sleep(10);
+            LOGI("=== Bekleme bitti, domain_get cagriliyor ===");
+
             Il2CppDomain* domain = (Il2CppDomain*)api.domain_get();
-            if (domain && api.thread_attach) {
+            LOGI("=== domain_get sonuc: %p ===", domain);
+
+            if (!domain) {
+                LOGE("Domain null dondu, IL2CPP hazir degil!");
+                return;
+            }
+
+            if (api.thread_attach) {
                 api.thread_attach(domain);
                 LOGI("Thread IL2CPP domain'ine attach edildi");
             }
