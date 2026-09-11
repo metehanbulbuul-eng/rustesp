@@ -23,15 +23,11 @@ static int find_lib_callback(struct dl_phdr_info* info, size_t size, void* data)
     return 0;
 }
 
-// === ELF dosyasından sembol ara (namespace bağımsız) ===
+// === ELF'ten sembol ara (GNU hash tabanlı, güvenli) ===
 static void* find_symbol_in_elf(uintptr_t base, const char* symbol_name) {
     Elf64_Ehdr* ehdr = (Elf64_Ehdr*)base;
-    if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) != 0) {
-        LOGE("ELF magic hatali!");
-        return nullptr;
-    }
+    if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) != 0) return nullptr;
 
-    // PT_DYNAMIC bul
     Elf64_Phdr* phdr = (Elf64_Phdr*)(base + ehdr->e_phoff);
     uintptr_t dyn_addr = 0;
     for (int i = 0; i < ehdr->e_phnum; i++) {
@@ -40,45 +36,49 @@ static void* find_symbol_in_elf(uintptr_t base, const char* symbol_name) {
             break;
         }
     }
-    if (!dyn_addr) { LOGE("PT_DYNAMIC yok"); return nullptr; }
+    if (!dyn_addr) return nullptr;
 
     Elf64_Dyn* dyn = (Elf64_Dyn*)dyn_addr;
-    uintptr_t symtab = 0, strtab = 0;
+    uintptr_t symtab = 0, strtab = 0, gnu_hash = 0;
     size_t strsz = 0;
-    uint64_t gnu_hash = 0;
 
     for (Elf64_Dyn* d = dyn; d->d_tag != DT_NULL; d++) {
         switch (d->d_tag) {
-            case DT_SYMTAB: symtab = d->d_un.d_ptr; break;
-            case DT_STRTAB: strtab = d->d_un.d_ptr; break;
-            case DT_STRSZ:  strsz  = d->d_un.d_val; break;
+            case DT_SYMTAB:   symtab   = d->d_un.d_ptr; break;
+            case DT_STRTAB:   strtab   = d->d_un.d_ptr; break;
+            case DT_STRSZ:    strsz    = d->d_un.d_val; break;
             case DT_GNU_HASH: gnu_hash = d->d_un.d_ptr; break;
         }
     }
 
-    // APK içinden yüklenen .so'larda DT_STRTAB/SYMTAB offset olabilir
     if (strtab < base) strtab += base;
     if (symtab < base) symtab += base;
     if (gnu_hash < base && gnu_hash != 0) gnu_hash += base;
 
-    if (!strtab || !symtab) { LOGE("strtab/symtab yok"); return nullptr; }
+    if (!strtab || !symtab || !gnu_hash) return nullptr;
 
-    // GNU hash tablosundan sembol sayısını bul
-    size_t num_syms = 0;
-    if (gnu_hash) {
-        uint32_t* gh = (uint32_t*)gnu_hash;
-        uint32_t nbuckets   = gh[0];
-        uint32_t symoffset  = gh[1];
-        uint32_t bloom_size = gh[2];
-        uint32_t* buckets   = (uint32_t*)&gh[4 + bloom_size * 2];
-        uint32_t max_sym = symoffset;
-        for (uint32_t i = 0; i < nbuckets; i++) {
-            if (buckets[i] > max_sym) max_sym = buckets[i];
-        }
-        num_syms = max_sym + 1000;  // güvenli üst sınır
-    } else {
-        num_syms = 100000;  // fallback
+    // GNU hash'ten gerçek sembol sayısını bul
+    uint32_t* gh = (uint32_t*)gnu_hash;
+    uint32_t nbuckets    = gh[0];
+    uint32_t symoffset   = gh[1];
+    uint32_t bloom_size  = gh[2];
+    uint64_t* bloom      = (uint64_t*)&gh[4];
+    uint32_t* buckets    = (uint32_t*)&bloom[bloom_size];
+    uint32_t* chain      = &buckets[nbuckets];
+
+    uint32_t max_sym = 0;
+    for (uint32_t i = 0; i < nbuckets; i++) {
+        if (buckets[i] > max_sym) max_sym = buckets[i];
     }
+
+    if (max_sym >= symoffset) {
+        uint32_t* c = &chain[max_sym - symoffset];
+        while (!(*c & 1)) {
+            max_sym++;
+            c++;
+        }
+    }
+    size_t num_syms = max_sym + 1;
 
     const char* str = (const char*)strtab;
     Elf64_Sym* sym  = (Elf64_Sym*)symtab;
@@ -86,7 +86,6 @@ static void* find_symbol_in_elf(uintptr_t base, const char* symbol_name) {
     for (size_t i = 0; i < num_syms; i++) {
         if (sym[i].st_name == 0 || sym[i].st_name >= strsz) continue;
         const char* name = str + sym[i].st_name;
-        if (name[0] == '\0') continue;
         if (strcmp(name, symbol_name) == 0) {
             return (void*)(base + sym[i].st_value);
         }
@@ -102,12 +101,12 @@ bool init_il2cpp_api() {
         return false;
     }
     LOGI("libil2cpp.so base: 0x%lx", (unsigned long)g_il2cpp_base);
-    LOGI("libil2cpp.so path: %s", g_il2cpp_path);
 
     #define LOAD_API(name, type) \
+        LOGI("Araniyor: il2cpp_%s", #name); \
         api.name = (type)find_symbol_in_elf(g_il2cpp_base, "il2cpp_" #name); \
-        if (!api.name) { LOGE("il2cpp_%s bulunamadi", #name); } \
-        else { LOGI("il2cpp_%s OK (%p)", #name, api.name); }
+        if (!api.name) { LOGE("  -> BULUNAMADI"); } \
+        else { LOGI("  -> OK (%p)", api.name); }
 
     LOAD_API(domain_get, void*(*)())
     LOAD_API(domain_assembly_open, void*(*)(void*, const char*))
