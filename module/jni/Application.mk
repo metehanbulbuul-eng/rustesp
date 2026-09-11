@@ -3,3 +3,4 @@ APP_PLATFORM := android-29
 APP_STL := none
 APP_CFLAGS := -Oz
 APP_CPPFLAGS := -std=c++17 -Oz
+APP_ALLOW_MISSING_DEPS := true
