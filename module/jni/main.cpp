@@ -4,6 +4,7 @@
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <dlfcn.h>
+#include <link.h>
 #include <unistd.h>
 #include <cstring>
 #include <cstdio>
@@ -25,6 +26,19 @@ std::string read_string(void* il2cpp_str);
 static bool g_is_target = false;
 static bool g_hook_installed = false;
 
+// === libil2cpp.so base adresi kontrolü ===
+static uintptr_t check_il2cpp_loaded() {
+    uintptr_t result = 0;
+    dl_iterate_phdr([](struct dl_phdr_info* info, size_t, void* data) -> int {
+        if (info->dlpi_name && strstr(info->dlpi_name, "libil2cpp.so")) {
+            *(uintptr_t*)data = (uintptr_t)info->dlpi_addr;
+            return 1;
+        }
+        return 0;
+    }, &result);
+    return result;
+}
+
 // === Zygisk modülü ===
 class RustESPModule : public ModuleBase {
 public:
@@ -38,10 +52,7 @@ public:
     }
 
     void preAppSpecialize(AppSpecializeArgs* args) override {
-        // Her şeyi null check et, hata olursa modülü hemen kapat
-        if (!api_ptr) {
-            return;  // api yoksa hiçbir şey yapamayız
-        }
+        if (!api_ptr) return;
 
         if (!env_ptr || !args || !args->nice_name) {
             LOGI("preAppSpecialize: null arg, closing module");
@@ -65,36 +76,29 @@ public:
     }
 
     void postAppSpecialize(const AppSpecializeArgs* args) override {
-        // Target değilse hiçbir şey yapma
-        if (!g_is_target) {
-            return;
-        }
+        if (!g_is_target) return;
 
         LOGI("postAppSpecialize: target app, spawning worker thread...");
 
-        // Thread'i hemen başlat, ama içinde try-catch mantığı olsun
         std::thread worker([]() {
-            // libil2cpp.so'nun yüklenmesini bekle
+            // libil2cpp.so'nun yüklenmesini bekle - dl_iterate_phdr ile kontrol
             int attempts = 0;
             while (attempts < 60) {
-                void* h = dlopen("libil2cpp.so", RTLD_NOLOAD | RTLD_NOW);
-                if (h) {
-                    dlclose(h);
-                    break;
-                }
+                uintptr_t test_base = check_il2cpp_loaded();
+                if (test_base != 0) break;
                 sleep(1);
                 attempts++;
             }
 
             if (attempts >= 60) {
-                LOGE("libil2cpp.so 60 saniye içinde yüklenmedi");
+                LOGE("libil2cpp.so 60 saniye icinde yuklenmedi");
                 return;
             }
 
-            LOGI("libil2cpp.so yüklendi, ESP başlatılıyor...");
+            LOGI("libil2cpp.so yuklendi, ESP baslatiliyor...");
 
             if (!init_il2cpp_api()) {
-                LOGE("IL2CPP API başlatılamadı");
+                LOGE("IL2CPP API baslatilamadi");
                 return;
             }
 
@@ -109,7 +113,7 @@ public:
                  g_player_class, g_camera_class, g_entity_manager_class);
 
             g_hook_installed = true;
-            LOGI("ESP hazır");
+            LOGI("ESP hazir");
         });
         worker.detach();
     }

@@ -6,40 +6,33 @@
 #include <cstdio>
 #include <cstdlib>
 
-// Global değişkenler
 uintptr_t g_il2cpp_base = 0;
 Il2CppApi api = {};
 
-// === dl_iterate_phdr callback: libil2cpp.so'nun base'ini bul ===
+// === dl_iterate_phdr callback ===
 static int find_lib_callback(struct dl_phdr_info* info, size_t size, void* data) {
     (void)size;
     const char* target = (const char*)data;
     if (info->dlpi_name && strstr(info->dlpi_name, target)) {
         g_il2cpp_base = (uintptr_t)info->dlpi_addr;
-        return 1; // Bulundu, dur
+        return 1;
     }
-    return 0; // Devam et
+    return 0;
 }
 
-// === IL2CPP API fonksiyonlarını dlsym ile bağla ===
+// === IL2CPP API fonksiyonlarını RTLD_DEFAULT ile bul ===
 bool init_il2cpp_api() {
-    void* handle = dlopen("libil2cpp.so", RTLD_NOLOAD | RTLD_NOW);
-    if (!handle) {
-        LOGE("libil2cpp.so yuklu degil!");
-        return false;
-    }
-
-    // dl_iterate_phdr ile base adresi bul
+    // 1. dl_iterate_phdr ile base adresi bul
     dl_iterate_phdr(find_lib_callback, (void*)"libil2cpp.so");
-
     if (g_il2cpp_base == 0) {
-        LOGE("libil2cpp.so base adresi bulunamadi!");
+        LOGE("libil2cpp.so base bulunamadi (dl_iterate_phdr)");
         return false;
     }
     LOGI("libil2cpp.so base: 0x%lx", (unsigned long)g_il2cpp_base);
 
+    // 2. RTLD_DEFAULT ile fonksiyonları bul (tüm namespace'leri tarar)
     #define LOAD_API(name, type) \
-        api.name = (type)dlsym(handle, "il2cpp_" #name); \
+        api.name = (type)dlsym(RTLD_DEFAULT, "il2cpp_" #name); \
         if (!api.name) { LOGE("il2cpp_%s bulunamadi", #name); }
 
     LOAD_API(domain_get, void*(*)())
@@ -67,39 +60,31 @@ bool init_il2cpp_api() {
         LOGE("Kritik API fonksiyonlari eksik!");
         return false;
     }
-
     LOGI("IL2CPP API hazir.");
     return true;
 }
 
-// === Belirli bir sınıfı bul ===
 Il2CppClass* find_class(const char* namespaze, const char* name) {
     if (!api.domain_get || !api.domain_assembly_open) return nullptr;
-
     Il2CppDomain* domain = (Il2CppDomain*)api.domain_get();
     if (!domain) return nullptr;
 
     const char* assemblies[] = { "Assembly-CSharp.dll", "mscorlib.dll", nullptr };
-
     for (int i = 0; assemblies[i]; i++) {
         Il2CppAssembly* asm_ = (Il2CppAssembly*)api.domain_assembly_open(domain, assemblies[i]);
         if (!asm_) continue;
-
         Il2CppImage* image = (Il2CppImage*)api.assembly_get_image(asm_);
         if (!image) continue;
-
         Il2CppClass* klass = (Il2CppClass*)api.class_from_name(image, namespaze, name);
         if (klass) {
             LOGI("Sinif bulundu: %s.%s", namespaze, name);
             return klass;
         }
     }
-
     LOGE("Sinif bulunamadi: %s.%s", namespaze, name);
     return nullptr;
 }
 
-// === String okuma ===
 std::string read_string(void* il2cpp_str) {
     if (!il2cpp_str || !api.string_to_utf8) return "";
     char* cstr = api.string_to_utf8(il2cpp_str);
