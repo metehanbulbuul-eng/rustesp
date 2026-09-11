@@ -66,6 +66,7 @@ struct Il2CppApi {
     const char* (*class_get_name)(void* klass);
     const char* (*class_get_namespace)(void* klass);
     void* (*thread_attach)(void* domain);
+	void** (*domain_get_assemblies)(void* domain, size_t* count);
 };
 
 extern Il2CppApi api;

@@ -119,6 +119,7 @@ bool init_il2cpp_api() {
     LOAD_API(class_get_name, const char*(*)(void*))
     LOAD_API(class_get_namespace, const char*(*)(void*))
     LOAD_API(thread_attach, void*(*)(void*))
+	LOAD_API(domain_get_assemblies, void**(*)(void*, size_t*))
 
     #undef LOAD_API
 
@@ -133,22 +134,38 @@ bool init_il2cpp_api() {
 }
 
 Il2CppClass* find_class(const char* namespaze, const char* name) {
-    if (!api.domain_get || !api.domain_assembly_open) return nullptr;
+    if (!api.domain_get || !api.domain_get_assemblies || !api.assembly_get_image) {
+        LOGE("Gerekli API fonksiyonlari eksik!");
+        return nullptr;
+    }
+
     Il2CppDomain* domain = (Il2CppDomain*)api.domain_get();
     if (!domain) return nullptr;
 
-    const char* assemblies[] = { "Assembly-CSharp.dll", "mscorlib.dll", nullptr };
-    for (int i = 0; assemblies[i]; i++) {
-        Il2CppAssembly* asm_ = (Il2CppAssembly*)api.domain_assembly_open(domain, assemblies[i]);
-        if (!asm_) continue;
-        Il2CppImage* image = (Il2CppImage*)api.assembly_get_image(asm_);
+    // Oyundaki tüm assembly'leri al
+    size_t asm_count = 0;
+    void** assemblies = api.domain_get_assemblies(domain, &asm_count);
+    LOGI("Toplam assembly sayisi: %zu", asm_count);
+
+    if (!assemblies || asm_count == 0) {
+        LOGE("Assembly listesi bos!");
+        return nullptr;
+    }
+
+    // Her assembly'yi tek tek dene
+    for (size_t i = 0; i < asm_count; i++) {
+        if (!assemblies[i]) continue;
+
+        Il2CppImage* image = (Il2CppImage*)api.assembly_get_image(assemblies[i]);
         if (!image) continue;
+
         Il2CppClass* klass = (Il2CppClass*)api.class_from_name(image, namespaze, name);
         if (klass) {
-            LOGI("Sinif bulundu: %s.%s", namespaze, name);
+            LOGI("Sinif bulundu: %s.%s (assembly %zu)", namespaze, name, i);
             return klass;
         }
     }
+
     LOGE("Sinif bulunamadi: %s.%s", namespaze, name);
     return nullptr;
 }
