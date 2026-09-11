@@ -23,12 +23,10 @@ jobs:
 
       - name: Prepare Magisk Module
         run: |
-          mkdir -p output
-          cp -r module/* output/
-          mkdir -p output/system/lib64
-          cp module/libs/arm64-v8a/libzygisk.so output/system/lib64/ 2>/dev/null || true
-          cp module/libs/arm64-v8a/libzygisk.so output/ 2>/dev/null || true
-          
+          mkdir -p output/zygisk
+          cp module/libs/arm64-v8a/libzygisk.so output/zygisk/arm64-v8a.so
+          cp module/module.prop output/
+
       - name: Create module zip
         run: |
           cd output
