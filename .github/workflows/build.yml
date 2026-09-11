@@ -1,0 +1,42 @@
+name: Build ESP Module
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25b
+
+      - name: Build with ndk-build
+        run: |
+          cd module
+          ndk-build NDK_PROJECT_PATH=. NDK_APPLICATION_MK=./jni/Application.mk
+
+      - name: Prepare Magisk Module
+        run: |
+          mkdir -p output
+          cp -r module/* output/
+          mkdir -p output/system/lib64
+          cp module/libs/arm64-v8a/libzygisk.so output/system/lib64/ 2>/dev/null || true
+          cp module/libs/arm64-v8a/libzygisk.so output/ 2>/dev/null || true
+          
+      - name: Create module zip
+        run: |
+          cd output
+          zip -r ../RustESP.zip .
+          cd ..
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RustESP-Module
+          path: RustESP.zip
