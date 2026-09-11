@@ -119,7 +119,7 @@ bool init_il2cpp_api() {
     LOAD_API(class_get_name, const char*(*)(void*))
     LOAD_API(class_get_namespace, const char*(*)(void*))
     LOAD_API(thread_attach, void*(*)(void*))
-	LOAD_API(domain_get_assemblies, void**(*)(void*, size_t*))
+    LOAD_API(domain_get_assemblies, void**(*)(void*, size_t*))
 
     #undef LOAD_API
 
@@ -134,7 +134,7 @@ bool init_il2cpp_api() {
 }
 
 Il2CppClass* find_class(const char* namespaze, const char* name) {
-    if (!api.domain_get || !api.domain_get_assemblies || !api.assembly_get_image) {
+    if (!api.domain_get || !api.domain_assembly_open || !api.assembly_get_image) {
         LOGE("Gerekli API fonksiyonlari eksik!");
         return nullptr;
     }
@@ -142,31 +142,39 @@ Il2CppClass* find_class(const char* namespaze, const char* name) {
     Il2CppDomain* domain = (Il2CppDomain*)api.domain_get();
     if (!domain) return nullptr;
 
-    // Oyundaki tüm assembly'leri al
-    size_t asm_count = 0;
-    void** assemblies = api.domain_get_assemblies(domain, &asm_count);
-    LOGI("Toplam assembly sayisi: %zu", asm_count);
+    // Rust Mobile'da olası assembly isimleri (dump.cs'ten)
+    const char* assemblies[] = {
+        "Client.Runtime.dll",
+        "Soc.Common.dll",
+        "Rust.Global.dll",
+        "Rust.World.dll",
+        "Assembly-CSharp.dll",
+        "ClientAOT.runtime.dll",
+        "Pandora.Runtime.dll",
+        "Soc.Common.Unity.dll",
+        "Soc.Code.Patch.dll",
+        "SocAssetBundle.Runtime.dll",
+        "SocSTL.dll",
+        "UnityEngine.CoreModule.dll",
+        "mscorlib.dll",
+        nullptr
+    };
 
-    if (!assemblies || asm_count == 0) {
-        LOGE("Assembly listesi bos!");
-        return nullptr;
-    }
+    for (int i = 0; assemblies[i] != nullptr; i++) {
+        Il2CppAssembly* asm_ = (Il2CppAssembly*)api.domain_assembly_open(domain, assemblies[i]);
+        if (!asm_) continue;
 
-    // Her assembly'yi tek tek dene
-    for (size_t i = 0; i < asm_count; i++) {
-        if (!assemblies[i]) continue;
-
-        Il2CppImage* image = (Il2CppImage*)api.assembly_get_image(assemblies[i]);
+        Il2CppImage* image = (Il2CppImage*)api.assembly_get_image(asm_);
         if (!image) continue;
 
         Il2CppClass* klass = (Il2CppClass*)api.class_from_name(image, namespaze, name);
         if (klass) {
-            LOGI("Sinif bulundu: %s.%s (assembly %zu)", namespaze, name, i);
+            LOGI("Sinif bulundu: '%s.%s' (assembly: %s)", namespaze, name, assemblies[i]);
             return klass;
         }
     }
 
-    LOGE("Sinif bulunamadi: %s.%s", namespaze, name);
+    LOGE("Sinif bulunamadi: '%s.%s'", namespaze, name);
     return nullptr;
 }
 
