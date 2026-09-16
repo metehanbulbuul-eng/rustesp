@@ -20,11 +20,11 @@
 using namespace zygisk;
 
 // gl.cpp fonksiyonları
-bool  gl_init();
-void  gl_set_screen_size(int w, int h);
-void  gl_draw_rect(float x, float y, float w, float h, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
-void  gl_draw_filled_rect(float x, float y, float w, float h, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
-void  gl_draw_text(float x, float y, const char* text, float scale, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+bool gl_init();
+void gl_set_screen_size(int w, int h);
+void gl_draw_rect(float x, float y, float w, float h, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+void gl_draw_filled_rect(float x, float y, float w, float h, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+void gl_draw_text(float x, float y, const char* text, float scale, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 float gl_text_width(const char* text, float scale);
 
 // il2cpp.cpp fonksiyonları
@@ -39,12 +39,11 @@ Il2CppClass* g_entity_manager_class = nullptr;
 
 static bool g_is_target = false;
 static bool g_gl_ready = false;
-static std::atomic<bool> g_esp_on{false};   // Dosyadan okunacak
+static std::atomic<bool> g_esp_on{false};
 static std::atomic<int> g_egl_count{0};
 static std::atomic<int> g_vk_count{0};
 static int g_screen_w = 1080, g_screen_h = 2400;
 
-// ESP durum dosyası
 #define ESP_STATE_FILE "/data/local/tmp/esp_state.txt"
 
 // EGL hook
@@ -55,7 +54,6 @@ static eglSwapBuffers_t g_orig_egl = nullptr;
 typedef int (*vkQueuePresentKHR_t)(void*, const void*);
 static vkQueuePresentKHR_t g_orig_vk = nullptr;
 
-// === lib base ===
 static uintptr_t find_lib_base(const char* libname) {
     struct Ctx { const char* n; uintptr_t out; } ctx { libname, 0 };
     dl_iterate_phdr([](struct dl_phdr_info* info, size_t, void* data) -> int {
@@ -69,19 +67,18 @@ static uintptr_t find_lib_base(const char* libname) {
     return ctx.out;
 }
 
-// === EntityManager / Camera ===
 static void* get_entity_manager_instance() {
     typedef void* (*t)();
     t fn = call_rva<t>(RVA_EntityManager_get_Instance);
-    return fn();
+    return fn ? fn() : nullptr;
 }
+
 static void* get_main_camera() {
     typedef void* (*t)();
     t fn = call_rva<t>(RVA_Camera_get_main);
-    return fn();
+    return fn ? fn() : nullptr;
 }
 
-// === World to Screen (Güncellenmiş Güvenli Versiyon) ===
 struct W2SOut { float x, y, z; };
 
 static bool w2s(void* cam, Vec3 w, Vec2* o) {
@@ -95,7 +92,6 @@ static bool w2s(void* cam, Vec3 w, Vec2* o) {
     return r.z > 0;
 }
 
-// === ESP durum dosyasını oku ===
 static void read_esp_state() {
     static int lastState = -1;
     std::ifstream f(ESP_STATE_FILE);
@@ -110,7 +106,6 @@ static void read_esp_state() {
     }
 }
 
-// === ESP çiz ===
 static void draw_esp() {
     void* cam = get_main_camera();
     void* em = get_entity_manager_instance();
@@ -133,12 +128,12 @@ static void draw_esp() {
         if (*(void**)v != g_player_class) continue;
         typedef bool (*gb)(void*);
         gb isLocal = call_rva<gb>(RVA_Player_get_bLocalPlayer);
-        if (isLocal(v)) {
+        if (isLocal && isLocal(v)) {
             typedef float (*gf)(void*);
             gf px = call_rva<gf>(RVA_Player_get_PosX_Smooth);
             gf py = call_rva<gf>(RVA_Player_get_PosY_Smooth);
             gf pz = call_rva<gf>(RVA_Player_get_PosZ_Smooth);
-            local.x = px(v); local.y = py(v); local.z = pz(v);
+            local.x = px ? px(v) : 0; local.y = py ? py(v) : 0; local.z = pz ? pz(v) : 0;
             lf = true; break;
         }
     }
@@ -152,23 +147,25 @@ static void draw_esp() {
 
         typedef bool (*gb)(void*);
         gb isLocal = call_rva<gb>(RVA_Player_get_bLocalPlayer);
-        if (isLocal(v)) continue;
+        if (isLocal && isLocal(v)) continue;
         gb isDead = call_rva<gb>(RVA_Player_get_IsDead);
-        if (isDead(v)) continue;
+        if (isDead && isDead(v)) continue;
 
         typedef float (*gf)(void*);
         gf px = call_rva<gf>(RVA_Player_get_PosX_Smooth);
         gf py = call_rva<gf>(RVA_Player_get_PosY_Smooth);
         gf pz = call_rva<gf>(RVA_Player_get_PosZ_Smooth);
-        Vec3 p; p.x = px(v); p.y = py(v); p.z = pz(v);
+        Vec3 p; 
+        p.x = px ? px(v) : 0; p.y = py ? py(v) : 0; p.z = pz ? pz(v) : 0;
 
         gf ghp = call_rva<gf>(RVA_Player_get_Hp);
         gf gmh = call_rva<gf>(RVA_Player_get_MaxHp);
-        float hp = ghp(v), mhp = gmh(v);
+        float hp = ghp ? ghp(v) : 100;
+        float mhp = gmh ? gmh(v) : 100;
 
         typedef void* (*gs)(void*);
         gs gn = call_rva<gs>(RVA_Player_get_Name);
-        std::string nm = read_string(gn(v));
+        std::string nm = gn ? read_string(gn(v)) : "Player";
 
         Vec2 s;
         if (!w2s(cam, p, &s)) continue;
@@ -180,7 +177,6 @@ static void draw_esp() {
             dist = sqrtf(dx*dx + dy*dy + dz*dz);
         }
 
-        // Kafa ve ayak noktalarını bul
         Vec3 head = { p.x, p.y + 1.75f, p.z };
         Vec2 sHead;
         if (!w2s(cam, head, &sHead)) continue;
@@ -191,16 +187,13 @@ static void draw_esp() {
         float bx = sHead.x - bw * 0.5f;
         float by = sHead.y;
 
-        // Kutu
         gl_draw_rect(bx, by, bw, bh, 255, 0, 0, 255);
 
-        // İsim
         if (!nm.empty()) {
             float tw = gl_text_width(nm.c_str(), 1.5f);
             gl_draw_text(s.x - tw*0.5f, by - 22, nm.c_str(), 1.5f, 255,255,255,255);
         }
 
-        // Mesafe
         if (lf) {
             char d[32];
             snprintf(d, sizeof(d), "[%.0fm]", dist);
@@ -208,7 +201,6 @@ static void draw_esp() {
             gl_draw_text(s.x - tw*0.5f, s.y + 4, d, 1.2f, 255,255,0,255);
         }
 
-        // Can barı
         if (mhp > 0) {
             float r = hp / mhp;
             if (r < 0) r = 0;
@@ -219,14 +211,12 @@ static void draw_esp() {
     }
 }
 
-// === ESP durum göstergesi (sadece açıkken çiz) ===
 static void draw_status_marker() {
     if (g_esp_on.load()) {
         gl_draw_filled_rect(20, 20, 30, 30, 0, 255, 0, 255);
     }
 }
 
-// === EGL hook fonksiyonu ===
 static EGLBoolean my_eglSwapBuffers(EGLDisplay dpy, EGLSurface surf) {
     int c = g_egl_count.fetch_add(1) + 1;
     if (c == 1) LOGI(">>> eglSwapBuffers ILK CAGRI <<<");
@@ -251,28 +241,22 @@ static EGLBoolean my_eglSwapBuffers(EGLDisplay dpy, EGLSurface surf) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        // Dosyadan ESP durumunu oku
         read_esp_state();
-
-        // Durum göstergesi
         draw_status_marker();
 
-        // ESP çiz (sadece açıksa)
         if (g_esp_on.load()) {
             draw_esp();
         }
     }
-    return g_orig_egl(dpy, surf);
+    return g_orig_egl ? g_orig_egl(dpy, surf) : EGL_TRUE;
 }
 
-// === Vulkan hook fonksiyonu ===
 static int my_vkQueuePresentKHR(void* q, const void* info) {
     int c = g_vk_count.fetch_add(1) + 1;
     if (c == 1) LOGI(">>> vkQueuePresentKHR ILK CAGRI - VULKAN! <<<");
-    return g_orig_vk(q, info);
+    return g_orig_vk ? g_orig_vk(q, info) : 0;
 }
 
-// === Heartbeat thread ===
 static void heartbeat_thread() {
     for (int i = 0; i < 1000; i++) {
         sleep(5);
@@ -282,14 +266,13 @@ static void heartbeat_thread() {
     }
 }
 
-// === Dobby ile hook kur ===
 static void install_hooks() {
     void* libegl = dlopen("libEGL.so", RTLD_NOW);
     if (libegl) {
         void* target = dlsym(libegl, "eglSwapBuffers");
         if (target) {
             LOGI("eglSwapBuffers addr: %p", target);
-            //DobbyHook(target, (void*)my_eglSwapBuffers, (void**)&g_orig_egl);
+            DobbyHook(target, (void*)my_eglSwapBuffers, (void**)&g_orig_egl);
         }
     }
 
@@ -298,12 +281,11 @@ static void install_hooks() {
         void* target = dlsym(libvk, "vkQueuePresentKHR");
         if (target) {
             LOGI("vkQueuePresentKHR addr: %p", target);
-            //DobbyHook(target, (void*)my_vkQueuePresentKHR, (void**)&g_orig_vk);
+            DobbyHook(target, (void*)my_vkQueuePresentKHR, (void**)&g_orig_vk);
         }
     }
 }
 
-// === Zygisk modülü ===
 class RustESPModule : public ModuleBase {
 public:
     Api* api_ptr = nullptr;
@@ -331,12 +313,36 @@ public:
         LOGI("Rust Mobile tespit edildi");
     }
 
-   void postAppSpecialize(const AppSpecializeArgs*) override {
+    void postAppSpecialize(const AppSpecializeArgs*) override {
         if (!g_is_target) return;
-        
-        LOGI("Rust Mobile baslatildi, modül aktif.");
-        
-        // Şimdilik çökme yapmasın diye hook ve il2cpp çağrılarını geçici olarak kapattık
+
+        std::thread([]() {
+            int a = 0;
+            while (a < 60 && find_lib_base("libil2cpp.so") == 0) {
+                sleep(1);
+                a++;
+            }
+            if (a >= 60) {
+                LOGE("libil2cpp yuklenmedi");
+                return;
+            }
+            if (!init_il2cpp_api()) {
+                LOGE("init_il2cpp_api basarisiz oldu");
+                return;
+            }
+
+            LOGI("il2cpp API basariyla yuklendi, hooklar kuruluyor...");
+            install_hooks();
+
+            g_player_class = find_class("WizardGames.Soc.Common.Entity", "PlayerEntity");
+            g_camera_class = find_class("UnityEngine", "Camera");
+            g_entity_manager_class = find_class("WizardGames.Soc.Share.Framework", "EntityManager");
+
+            LOGI("P=%p C=%p EM=%p", g_player_class, g_camera_class, g_entity_manager_class);
+
+            std::thread(heartbeat_thread).detach();
+            LOGI("ESP tamamen hazir!");
+        }).detach();
     }
 };
 
