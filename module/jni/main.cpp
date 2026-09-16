@@ -272,7 +272,7 @@ static void install_hooks() {
         void* target = dlsym(libegl, "eglSwapBuffers");
         if (target) {
             LOGI("eglSwapBuffers addr: %p", target);
-            DobbyHook(target, (void*)my_eglSwapBuffers, (void**)&g_orig_egl);
+            //DobbyHook(target, (void*)my_eglSwapBuffers, (void**)&g_orig_egl);
         }
     }
 
@@ -281,7 +281,7 @@ static void install_hooks() {
         void* target = dlsym(libvk, "vkQueuePresentKHR");
         if (target) {
             LOGI("vkQueuePresentKHR addr: %p", target);
-            DobbyHook(target, (void*)my_vkQueuePresentKHR, (void**)&g_orig_vk);
+            //DobbyHook(target, (void*)my_vkQueuePresentKHR, (void**)&g_orig_vk);
         }
     }
 }
