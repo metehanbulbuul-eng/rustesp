@@ -333,28 +333,10 @@ public:
 
    void postAppSpecialize(const AppSpecializeArgs*) override {
         if (!g_is_target) return;
-        std::thread([]() {
-            int a = 0;
-            while (a < 60 && find_lib_base("libil2cpp.so") == 0) {
-                sleep(1);
-                a++;
-            }
-            if (a >= 60) {
-                LOGE("libil2cpp yuklenmedi");
-                return;
-            }
-            
-            LOGI("libil2cpp bulundu, test asamasi basarili!");
-            
-            // Buradaki hook ve api cagrilarini simdilik pasiflestiriyoruz
-            /*
-            if (!init_il2cpp_api()) return;
-            LOGI("10sn bekleniyor...");
-            sleep(10);
-            install_hooks();
-            */
-
-        }).detach();
+        
+        LOGI("Rust Mobile baslatildi, modül aktif.");
+        
+        // Şimdilik çökme yapmasın diye hook ve il2cpp çağrılarını geçici olarak kapattık
     }
 };
 
