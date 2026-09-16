@@ -1,3 +1,4 @@
+#include <sys/types.h>
 #include "zygisk.hpp"
 #include <jni.h>
 #include <android/log.h>
@@ -46,8 +47,6 @@ public:
         if (!is_target) return;
 
         LOGI("Oyun basariyla baslatildi, Zygisk enjeksiyonu aktif!");
-        
-        // Buraya ileride çökme yaptırmayan güvenli kodlar eklenebilir.
     }
 };
 
