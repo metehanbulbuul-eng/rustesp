@@ -1,17 +1,16 @@
+// offsets.h
 #pragma once
 
-// Dump.cs'ten çıkardığımız RVA offset'leri (libil2cpp.so base'e göre)
-
-// === Camera (UnityEngine.Camera) ===
+// ============ Camera (UnityEngine.Camera) ============
 #define RVA_Camera_get_main            0xd4b857c
 #define RVA_Camera_WorldToScreenPoint  0xd4b7d80
 
-// === EntityManager ===
+// ============ EntityManager ============
 #define RVA_EntityManager_get_Instance 0x75ff2d8
 #define RVA_EntityManager_get_Entities 0x75ff530
 #define RVA_EntityManager_get_Count    0x75ff360
 
-// === PlayerEntity ===
+// ============ PlayerEntity ============
 #define RVA_Player_get_MyPlayerClient  0x7a2b3fc
 #define RVA_Player_get_bLocalPlayer    0x7a36a84
 #define RVA_Player_get_PosX_Smooth     0x7a279e0
@@ -26,15 +25,9 @@
 #define RVA_Player_get_RoleId          0x7a27490
 #define RVA_Player_get_Level           0x79f5228
 
-// === EntityManager field offset ===
+// ============ Field offsets ============
 #define FIELD_EntityManager_entities   0x18
-
-// === Dictionary<long, EntityBase> field offset ===
 #define FIELD_Dict_entries             0x18
 #define FIELD_Dict_count               0x20
-
-// === ArrayBase element start ===
 #define ARRAY_FIRST_ELEMENT_OFFSET     0x20
-
-// === Entry struct size ===
 #define ENTRY_SIZE                     0x18

@@ -96,7 +96,7 @@ bool init_il2cpp_api() {
     }
     LOGI("libil2cpp.so base: 0x%lx", (unsigned long)g_il2cpp_base);
 
-    #define LOAD_API(name, type) \
+#define LOAD_API(name, type) \
         api.name = (type)find_symbol_in_elf(g_il2cpp_base, "il2cpp_" #name); \
         if (!api.name) { LOGE("il2cpp_%s BULUNAMADI", #name); } \
         else { LOGI("il2cpp_%s OK", #name); }
@@ -121,7 +121,7 @@ bool init_il2cpp_api() {
     LOAD_API(thread_attach, void*(*)(void*))
     LOAD_API(domain_get_assemblies, void**(*)(void*, size_t*))
 
-    #undef LOAD_API
+#undef LOAD_API
 
     api.string_to_utf8 = nullptr;
 
@@ -142,22 +142,21 @@ Il2CppClass* find_class(const char* namespaze, const char* name) {
     Il2CppDomain* domain = (Il2CppDomain*)api.domain_get();
     if (!domain) return nullptr;
 
-    // Rust Mobile'da olası assembly isimleri (dump.cs'ten)
     const char* assemblies[] = {
-        "Client.Runtime.dll",
-        "Soc.Common.dll",
-        "Rust.Global.dll",
-        "Rust.World.dll",
-        "Assembly-CSharp.dll",
-        "ClientAOT.runtime.dll",
-        "Pandora.Runtime.dll",
-        "Soc.Common.Unity.dll",
-        "Soc.Code.Patch.dll",
-        "SocAssetBundle.Runtime.dll",
-        "SocSTL.dll",
-        "UnityEngine.CoreModule.dll",
-        "mscorlib.dll",
-        nullptr
+            "Client.Runtime.dll",
+            "Soc.Common.dll",
+            "Rust.Global.dll",
+            "Rust.World.dll",
+            "Assembly-CSharp.dll",
+            "ClientAOT.runtime.dll",
+            "Pandora.Runtime.dll",
+            "Soc.Common.Unity.dll",
+            "Soc.Code.Patch.dll",
+            "SocAssetBundle.Runtime.dll",
+            "SocSTL.dll",
+            "UnityEngine.CoreModule.dll",
+            "mscorlib.dll",
+            nullptr
     };
 
     for (int i = 0; assemblies[i] != nullptr; i++) {
@@ -178,7 +177,6 @@ Il2CppClass* find_class(const char* namespaze, const char* name) {
     return nullptr;
 }
 
-// Manuel UTF-16 → UTF-8 dönüşümü
 std::string read_string(void* il2cpp_str) {
     if (!il2cpp_str) return "";
 
@@ -216,4 +214,18 @@ std::string read_string(void* il2cpp_str) {
         }
     }
     return result;
+}
+
+// offsets.h içindeki RVA'ları kullanarak entity/oyuncu listesini test edeceğimiz fonksiyon
+void RunESPloop() {
+    if (g_il2cpp_base == 0) return;
+
+    uintptr_t entityMgrInstance = *reinterpret_cast<uintptr_t*>(g_il2cpp_base + RVA_EntityManager_get_Instance);
+    if (entityMgrInstance == 0) return;
+
+    uintptr_t entityList = *reinterpret_cast<uintptr_t*>(entityMgrInstance + FIELD_EntityManager_entities);
+    if (entityList == 0) return;
+
+    int entityCount = *reinterpret_cast<int*>(entityMgrInstance + RVA_EntityManager_get_Count);
+    // LOGI("Aktif Entity Sayisi: %d", entityCount);
 }
