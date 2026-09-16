@@ -331,7 +331,7 @@ public:
         LOGI("Rust Mobile tespit edildi");
     }
 
-    void postAppSpecialize(const AppSpecializeArgs*) override {
+   void postAppSpecialize(const AppSpecializeArgs*) override {
         if (!g_is_target) return;
         std::thread([]() {
             int a = 0;
@@ -343,23 +343,17 @@ public:
                 LOGE("libil2cpp yuklenmedi");
                 return;
             }
+            
+            LOGI("libil2cpp bulundu, test asamasi basarili!");
+            
+            // Buradaki hook ve api cagrilarini simdilik pasiflestiriyoruz
+            /*
             if (!init_il2cpp_api()) return;
-
             LOGI("10sn bekleniyor...");
             sleep(10);
-
-            Il2CppDomain* d = (Il2CppDomain*)api.domain_get();
-            if (d && api.thread_attach) api.thread_attach(d);
-
-            g_player_class = find_class("WizardGames.Soc.Common.Entity", "PlayerEntity");
-            g_camera_class = find_class("UnityEngine", "Camera");
-            g_entity_manager_class = find_class("WizardGames.Soc.Share.Framework", "EntityManager");
-
-            LOGI("P=%p C=%p EM=%p", g_player_class, g_camera_class, g_entity_manager_class);
-
             install_hooks();
-            std::thread(heartbeat_thread).detach();
-            LOGI("ESP hazir!");
+            */
+
         }).detach();
     }
 };
