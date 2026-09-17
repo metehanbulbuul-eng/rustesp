@@ -20,12 +20,13 @@ jobs:
 
     - name: Build with NDK
       run: |
-        ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=Android.mk NDK_APPLICATION_MK=Application.mk
+        cd module
+        ndk-build
 
     - name: Prepare Artifact
       run: |
         mkdir -p output
-        cp obj/local/arm64-v8a/librustesp.so output/ 2>/dev/null || cp libs/arm64-v8a/librustesp.so output/
+        cp module/libs/arm64-v8a/*.so output/ 2>/dev/null || cp module/obj/local/arm64-v8a/*.so output/ 2>/dev/null
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
