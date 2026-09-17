@@ -1,40 +1,34 @@
-name: Build ESP Module
+name: Build Native Library
 
 on:
-  workflow_dispatch:
   push:
     branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r25b
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25b
+        add-to-path: true
 
-      - name: Build with ndk-build
-        run: |
-          cd module
-          ndk-build NDK_PROJECT_PATH=. NDK_APPLICATION_MK=./jni/Application.mk
+    - name: Build with NDK
+      run: |
+        ndk-build
 
-      - name: Prepare Magisk Module
-        run: |
-          mkdir -p output/zygisk
-          cp module/libs/arm64-v8a/libzygisk.so output/zygisk/arm64-v8a.so
-          cp module/module.prop output/
+    - name: Prepare Artifact
+      run: |
+        mkdir -p output
+        cp obj/local/arm64-v8a/librustesp.so output/ 2>/dev/null || cp libs/arm64-v8a/librustesp.so output/
 
-      - name: Create module zip
-        run: |
-          cd output
-          zip -r ../RustESP.zip .
-          cd ..
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: RustESP-Module
-          path: RustESP.zip
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: rustesp-native
+        path: output/
