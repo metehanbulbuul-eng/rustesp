@@ -20,7 +20,7 @@ jobs:
 
     - name: Build with NDK
       run: |
-        ndk-build
+        ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=Android.mk
 
     - name: Prepare Artifact
       run: |
